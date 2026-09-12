@@ -2,10 +2,13 @@
 
 Editor de texto interactivo por línea de comandos, desarrollado como proyecto para el curso de Sistemas Operativos (SO2026B) de la Universidad EAFIT. Implementa un ciclo de edición tipo `ed` (abrir, imprimir, agregar, borrar, insertar, buscar, salir) usando exclusivamente llamadas al sistema POSIX de bajo nivel, e integra ese editor como un comando nuevo dentro del shell educativo desarrollado en el curso.
 
-**Integrantes:** Samuel — Matías
+**Integrantes:** Samuel Valencia Montoya — Matías Zapata Rojas
 **Curso:** Sistemas Operativos (SO2026B) — Universidad EAFIT
+
 **Sistema operativo de desarrollo/prueba:** Linux (Fedora)
+
 **Lenguaje:** C (`-std=c99` / `-std=gnu99`)
+
 **Herramientas:** GCC, GNU Make, Valgrind, Bash, Git
 
 ---
@@ -13,13 +16,21 @@ Editor de texto interactivo por línea de comandos, desarrollado como proyecto p
 ## Contenido del repositorio
 
 ├── src/ # Editor de texto standalone (modo CLI + modo visual bonus)
+
 ├── Makefile # Compila el editor standalone
+
 ├── MANUAL_USUARIO.md
+
 ├── test_editor.sh
+
 └── shell/ # Shell educativo del curso con el editor integrado
+
 ├── main.c, shell.h, cat_*.c
+
 ├── estructura.c/h, modo_comando.c/h, cat_edicion.c (motor del editor)
+
 ├── Makefile
+
 └── NOTAS_TECNICAS.md
 
 
