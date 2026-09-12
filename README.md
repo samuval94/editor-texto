@@ -3,6 +3,7 @@
 Editor de texto interactivo por línea de comandos, desarrollado como proyecto para el curso de Sistemas Operativos (SO2026B) de la Universidad EAFIT. Implementa un ciclo de edición tipo `ed` (abrir, imprimir, agregar, borrar, insertar, buscar, salir) usando exclusivamente llamadas al sistema POSIX de bajo nivel, e integra ese editor como un comando nuevo dentro del shell educativo desarrollado en el curso.
 
 **Integrantes:** Samuel Valencia Montoya — Matías Zapata Rojas
+
 **Curso:** Sistemas Operativos (SO2026B) — Universidad EAFIT
 
 **Sistema operativo de desarrollo/prueba:** Linux (Fedora)
