@@ -83,13 +83,15 @@ eafitOS > editor demo.txt
 
 
 Eso abre (o crea) `demo.txt` y entra al modo de comandos del editor (prompt `editor>`):
-editor> a Hola mundo
+```
+editor> a Hola mundo 
 editor> a Segunda línea
 editor> p
 editor> i 2 Línea insertada
 editor> d 1
 editor> s Línea
 editor> q
+```
 
 ## Documentación adicional
 
