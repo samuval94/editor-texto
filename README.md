@@ -1,38 +1,36 @@
 # Editor de Texto EAFIT — Sistemas Operativos SO2026B
 
-Editor de texto interactivo por línea de comandos, desarrollado como proyecto para el curso de Sistemas Operativos (SO2026B) de la Universidad EAFIT. Implementa un ciclo de edición tipo `ed` (abrir, imprimir, agregar, borrar, insertar, buscar, salir) usando exclusivamente llamadas al sistema POSIX de bajo nivel, e integra ese editor como un comando nuevo dentro del shell educativo desarrollado en el curso.
+Editor de texto interactivo por línea de comandos, desarrollado como proyecto para el curso de Sistemas Operativos (SO2026B) de la Universidad EAFIT. Implementa un ciclo de edición tipo `ed` (abrir, imprimir, agregar, borrar, insertar, buscar, salir) usando exclusivamente llamadas al sistema POSIX de bajo nivel, integrado como un comando nuevo (`editor`) dentro del shell educativo desarrollado en el curso.
 
 **Integrantes:** Samuel Valencia Montoya — Matías Zapata Rojas
-
 **Curso:** Sistemas Operativos (SO2026B) — Universidad EAFIT
-
 **Sistema operativo de desarrollo/prueba:** Linux (Fedora)
-
 **Lenguaje:** C (`-std=c99` / `-std=gnu99`)
-
 **Herramientas:** GCC, GNU Make, Valgrind, Bash, Git
 
 ---
 
 ## Contenido del repositorio
 
-├── src/ # Editor de texto standalone (modo CLI + modo visual bonus)
-
-├── Makefile # Compila el editor standalone
-
-├── MANUAL_USUARIO.md
-
-├── test_editor.sh
-
-└── shell/ # Shell educativo del curso con el editor integrado
-
-├── main.c, shell.h, cat_*.c
-
-├── estructura.c/h, modo_comando.c/h, cat_edicion.c (motor del editor)
-
-├── Makefile
-
-└── NOTAS_TECNICAS.md
+```text
+.
+├── README.md
+└── shell/                  # Shell del curso, con el editor integrado
+    ├── main.c
+    ├── shell.h
+    ├── cat_datos.c
+    ├── cat_memoria.c
+    ├── cat_monitoreo.c
+    ├── cat_util.c
+    ├── cat_edicion.c        # Categoría nueva: registra el comando 'editor'
+    ├── estructura.c         # Buffer dinámico en memoria (líneas y palabras)
+    ├── estructura.h
+    ├── modo_comando.c       # Ciclo de comandos o/p/a/d/i/s/q del editor
+    ├── modo_comando.h
+    ├── Makefile
+    ├── NOTAS_TECNICAS.md    # Justificación de las decisiones de diseño
+    └── test_editor.sh       # Script de validación automática (PASS/FAIL)
+```
 
 
 ---
@@ -71,14 +69,20 @@ sudo dnf install gcc make valgrind git -y
 
 ## Cómo probarlo
 
-### 1. Editor standalone
+Todo se hace parado dentro de la carpeta `shell/`:
 
 ```bash
-make clean && make
-./editor demo.txt        # modo de comandos (por defecto)
+cd shell
+make
+./eafitOS
 ```
 
-Dentro del editor:
+Ya dentro del shell (prompt `eafitOS>`), se invoca el editor con:
+
+eafitOS > editor demo.txt
+
+
+Eso abre (o crea) `demo.txt` y entra al modo de comandos del editor (prompt `editor>`):
 editor> a Hola mundo
 editor> a Segunda línea
 editor> p
@@ -86,43 +90,6 @@ editor> i 2 Línea insertada
 editor> d 1
 editor> s Línea
 editor> q
-
-
-También se puede correr la batería de pruebas automática:
-
-```bash
-./test_editor.sh
-```
-
-Y el modo visual (bonus, heredado de la base del profesor):
-
-```bash
-./editor --visual demo.txt
-```
-
-### 2. Shell con el editor integrado
-
-```bash
-cd shell
-make clean && make
-./eafitOS
-```
-
-Dentro del shell:
-
-eafitOS> editor demo.txt
-editor> a Probando desde el shell
-editor> q
-eafitOS> exit
-
-
-### 3. Verificación de memoria (opcional pero recomendado)
-
-```bash
-valgrind --leak-check=full --show-leak-kinds=all --track-fds=yes ./editor demo.txt
-```
-
----
 
 ## Documentación adicional
 
