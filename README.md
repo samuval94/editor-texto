@@ -92,6 +92,11 @@ editor> d 1
 editor> s Línea
 editor> q
 ```
+Al escribir 'q', el control regresa al shell (prompt `eafitOS>` de nuevo). Para salir del shell completamente:
+
+```
+eafitOS> exit
+```
 
 ## Documentación adicional
 
