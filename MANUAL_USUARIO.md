@@ -1,7 +1,6 @@
-# Manual de usuario — Editor de Texto EAFIT
+# Manual de usuario — Editor EAFIT con compresor Huffman concurrente
 
-Editor de texto por línea de comandos (estilo `ed`) integrado al shell educativo `eafitOS`, con compresión
-Huffman concurrente en segundo plano.
+Compresor Huffman concurrente en segundo plano, integrado al editor de texto por línea de comandos (estilo `ed`) del shell `eafitOS`.
 
 ## 1. Compilar y arrancar
 
