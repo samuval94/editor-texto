@@ -15,7 +15,8 @@ Editor de texto interactivo por línea de comandos, desarrollado como proyecto p
 ```text
 .
 ├── README.md
-└── shell/                  # Shell del curso, con el editor integrado
+├── MANUAL_USUARIO.md        # Manual de uso del editor (Parcial 1 + comandos del Parcial 2)
+└── shell/                   # Shell del curso, con el editor integrado
     ├── main.c
     ├── shell.h
     ├── cat_datos.c
@@ -23,13 +24,18 @@ Editor de texto interactivo por línea de comandos, desarrollado como proyecto p
     ├── cat_monitoreo.c
     ├── cat_util.c
     ├── cat_edicion.c        # Categoría nueva: registra el comando 'editor'
-    ├── estructura.c         # Buffer dinámico en memoria (líneas y palabras)
-    ├── estructura.h
-    ├── modo_comando.c       # Ciclo de comandos o/p/a/d/i/s/q del editor
-    ├── modo_comando.h
+    ├── estructura.c / .h    # Buffer dinámico en memoria (líneas y palabras)
+    ├── modo_comando.c / .h  # Ciclo de comandos o/p/a/d/i/s/q + z/x/e/c/w del editor
+    ├── huffman.c / .h       # Parcial 2: compresor Huffman concurrente (pool de hilos)
+    ├── tarea_bg.c / .h      # Parcial 2: tarea en segundo plano del editor
+    ├── huf_cli.c            # Parcial 2: utilidad 'huf' para probar el módulo
     ├── Makefile
-    ├── NOTAS_TECNICAS.md    # Justificación de las decisiones de diseño
-    └── test_editor.sh       # Script de validación automática (PASS/FAIL)
+    ├── test_huffman.sh      # Parcial 2: 36 pruebas (md5, carreras, TSan, ASan, Valgrind)
+    ├── NOTAS_TECNICAS.md    # Justificación de las decisiones de diseño (Parcial 1)
+    ├── NOTAS_PARCIAL2.md    # Concurrencia y sincronización (Parcial 2)
+    ├── GUIA_DIDACTICA.md    # Guía del shell educativo (base entregada por el curso)
+    ├── README.md            # Descripción del shell educativo base
+    └── demo.txt             # Archivo de ejemplo para probar el editor
 ```
 
 
@@ -49,7 +55,6 @@ El editor mantiene el archivo abierto **completo en memoria** (una lista enlazad
 | `s <palabra>`    | Busca `<palabra>` e indica en qué líneas aparece.                 |
 | `q`              | Cierra el archivo (libera el descriptor) y termina.               |
 
-Se conserva además, como funcionalidad adicional, el editor visual de pantalla completa (estilo `nano`) entregado originalmente por el profesor como base, accesible con la bandera `--visual`.
 
 ---
 
@@ -98,7 +103,29 @@ Al escribir 'q', el control regresa al shell (prompt `eafitOS>` de nuevo). Para 
 eafitOS> exit
 ```
 
+## Parcial 2: Compresión Huffman concurrente en segundo plano
+
+El editor suma cinco comandos que **no bloquean** la interfaz (el trabajo corre en un pool de hilos `pthread`):
+
+| Comando            | Acción                                                                 |
+|--------------------|-------------------------------------------------------------------------|
+| `z [salida]`       | Comprime el archivo abierto (por defecto `<archivo>.huf`).               |
+| `x <huf> [salida]` | Descomprime verificando CRC-32 por bloque (no sobrescribe existentes).   |
+| `e`                | Muestra barra y porcentaje de la tarea; además hay avisos cada 10 %.     |
+| `c`                | Cancela la tarea en curso.                                               |
+| `w`                | Espera a que termine la tarea (útil en scripts).                         |
+
+Mientras se comprime se puede seguir editando (`a`, `d`, `i`): la tarea trabaja sobre un *snapshot* del archivo. Detalles del protocolo de sincronización en `shell/NOTAS_PARCIAL2.md`.
+
+```bash
+cd shell
+make            # compila el shell (eafitOS) y la utilidad 'huf'
+make test       # 36 pruebas (RAPIDO=1 ./test_huffman.sh omite sanitizers y valgrind)
+```
+
 ## Documentación adicional
 
-- `MANUAL_USUARIO.md` — manual de uso completo del editor.
+- `MANUAL_USUARIO.md` — manual de uso del editor, incluidos los comandos de compresión.
+- `shell/NOTAS_PARCIAL2.md` — diseño concurrente del Parcial 2: pool de hilos, tubería ordenada, condiciones de carrera editor↔tarea y verificación.
+- `shell/GUIA_DIDACTICA.md` y `shell/README.md` — documentación del shell educativo base del curso.
 - `shell/NOTAS_TECNICAS.md` — justificación de decisiones de arquitectura y mapeo de comandos a llamadas al sistema, usado como base para el informe técnico y la sustentación en video.

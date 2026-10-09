@@ -37,6 +37,12 @@
  *    de línea), evitando bytes residuales de una versión más larga.
  * 5. close(2): libera el descriptor de archivo al terminar la sesión
  *    ('q' o EOF), junto con toda la memoria dinámica de la estructura.
+ *
+ * PARCIAL 2 (Concurrencia): el editor suma los comandos z/x/e/c/w, que
+ * comprimen/descomprimen con Huffman concurrente en un hilo de fondo
+ * (huffman.c, tarea_bg.c). Añade: pthread_create/join/mutex/cond, pread(2),
+ * mkstemp(3)+unlink(2) (snapshot anónimo), rename(2) (publicación atómica) y
+ * sigaction(2) (SIGINT/SIGTERM). Ver NOTAS_PARCIAL2.md.
  */
 int cmd_editor(int argc, char **argv) {
     const char *archivo = (argc >= 2) ? argv[1] : NULL;
