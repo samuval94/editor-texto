@@ -4,4 +4,8 @@ huf
 sys_shell
 *.huf
 *.out
-a.out
+*.rec
+.vscode/
+.idea/
+core
+core.*

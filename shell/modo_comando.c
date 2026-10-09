@@ -1,5 +1,7 @@
 #include "modo_comando.h"
 #include "estructura.h"
+#include "tarea_bg.h"
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +25,12 @@ typedef struct {
     EstructuraTexto *estructura; /* Buffer dinámico en memoria (lista enlazada de líneas/palabras) */
     char *nombre_archivo;        /* Ruta del archivo actualmente abierto (o NULL) */
     int fd;                      /* Descriptor de archivo actual (-1 si no hay archivo abierto) */
+    TareaBg tarea;               /* Tarea Huffman en segundo plano (Parcial 2) */
 } EstadoComando;
+
+/* Bandera puesta por el manejador de SIGINT/SIGTERM (async-signal-safe). */
+static volatile sig_atomic_t g_interrumpido = 0;
+static void manejador_senal(int signo) { (void)signo; g_interrumpido = 1; }
 
 /* Duplica una cadena con malloc (evitamos strdup para mantener compatibilidad estricta con -std=c99). */
 static char* duplicar_cadena(const char *origen) {
@@ -38,6 +45,7 @@ static void estado_inicializar(EstadoComando *ec) {
     ec->estructura = NULL;
     ec->nombre_archivo = NULL;
     ec->fd = -1;
+    tarea_bg_inicializar(&ec->tarea);
 }
 
 /* Cierra el archivo actual (si existe) y libera toda la memoria dinámica asociada. */
@@ -74,6 +82,14 @@ static int requiere_archivo_abierto(const EstadoComando *ec) {
 static int cmd_o(EstadoComando *ec, const char *archivo) {
     if (!archivo || strlen(archivo) == 0) {
         fprintf(stderr, "[error] Uso: o <archivo>\n");
+        return -1;
+    }
+
+    /* Condición de carrera archivo<->tarea: no se puede abrir (y menos crear con
+       O_CREAT) una ruta que la tarea en segundo plano tiene reservada como salida
+       o está leyendo. */
+    if (tarea_bg_ruta_en_uso(&ec->tarea, archivo)) {
+        fprintf(stderr, "[error] '%s' está en uso por la tarea en segundo plano. Espere ('w') o cancele ('c').\n", archivo);
         return -1;
     }
 
@@ -185,6 +201,7 @@ static int cmd_a(EstadoComando *ec, const char *texto) {
         perror("write");
         return -1;
     }
+    tarea_bg_notificar_edicion(&ec->tarea);
     printf("Línea añadida al final (ahora es la línea %d).\n", ec->estructura->totalLineas);
     return 0;
 }
@@ -219,6 +236,7 @@ static int cmd_d(EstadoComando *ec, const char *arg) {
         perror("sincronizar (d)");
         return -1;
     }
+    tarea_bg_notificar_edicion(&ec->tarea);
     printf("Línea %d eliminada.\n", n);
     return 0;
 }
@@ -266,6 +284,7 @@ static int cmd_i(EstadoComando *ec, char *arg) {
         perror("sincronizar (i)");
         return -1;
     }
+    tarea_bg_notificar_edicion(&ec->tarea);
     printf("Línea insertada en la posición %d.\n", n);
     return 0;
 }
@@ -290,6 +309,113 @@ static int cmd_s(EstadoComando *ec, const char *palabra) {
             printf("%d%s", resultados[i], (i < mostrar - 1) ? ", " : "");
         }
         printf("\n");
+    }
+    return 0;
+}
+
+/* ============================================================================
+ * COMANDOS DEL PARCIAL 2: Compresión Huffman concurrente en segundo plano
+ * ----------------------------------------------------------------------------
+ * z [salida]            Comprime el archivo abierto -> <archivo>.huf
+ * x <archivo.huf> [sal] Descomprime (verifica CRC-32 por bloque)
+ * e                     Estado / barra de progreso de la tarea
+ * c                     Cancela la tarea en curso
+ * w                     Espera a que la tarea termine (útil en scripts)
+ * Ninguno bloquea el ciclo del editor: el trabajo corre en hilos propios.
+ * ========================================================================= */
+
+/* Construye "<base><sufijo>" en memoria dinámica. */
+static char* con_sufijo(const char *base, const char *sufijo) {
+    size_t lb = strlen(base), ls = strlen(sufijo);
+    char *s = (char*)malloc(lb + ls + 1);
+    if (!s) return NULL;
+    memcpy(s, base, lb);
+    memcpy(s + lb, sufijo, ls + 1);
+    return s;
+}
+
+static int cmd_z(EstadoComando *ec, const char *arg) {
+    if (!requiere_archivo_abierto(ec)) return -1;
+    char *destino = (arg && *arg) ? duplicar_cadena(arg) : con_sufijo(ec->nombre_archivo, ".huf");
+    if (!destino) { fprintf(stderr, "[error] No hay memoria suficiente (malloc).\n"); return -1; }
+
+    /* La salida jamás puede ser el propio archivo que se edita. */
+    if (tarea_bg_misma_ruta(destino, ec->nombre_archivo)) {
+        fprintf(stderr, "[error] La salida no puede ser el archivo abierto ('%s').\n", destino);
+        free(destino);
+        return -1;
+    }
+    if (tarea_bg_ruta_en_uso(&ec->tarea, destino)) {
+        fprintf(stderr, "[error] '%s' está reservado por otra tarea en segundo plano.\n", destino);
+        free(destino);
+        return -1;
+    }
+    /* Igual que 'x': nunca se pisa un archivo existente sin que el usuario lo decida. */
+    if (access(destino, F_OK) == 0) {
+        fprintf(stderr, "[error] '%s' ya existe; no se sobrescribe. Indique otra salida: z <otra_salida>\n", destino);
+        free(destino);
+        return -1;
+    }
+    if (tarea_bg_comprimir(&ec->tarea, ec->fd, ec->nombre_archivo, destino) == 0) {
+        printf("Compresión Huffman iniciada en segundo plano: '%s' -> '%s'.\n"
+               "Puede seguir editando; use 'e' para ver el progreso o 'c' para cancelar.\n",
+               ec->nombre_archivo, destino);
+    }
+    free(destino);
+    return 0;
+}
+
+static int cmd_x(EstadoComando *ec, char *arg) {
+    if (!arg || !*arg) { fprintf(stderr, "[error] Uso: x <archivo.huf> [salida]\n"); return -1; }
+    char *origen = arg;
+    char *resto = arg;
+    while (*resto && *resto != ' ') resto++;
+    if (*resto) { *resto++ = '\0'; while (*resto == ' ') resto++; }
+
+    char *destino;
+    if (*resto) {
+        destino = duplicar_cadena(resto);
+    } else {
+        size_t lo = strlen(origen);
+        if (lo > 4 && strcmp(origen + lo - 4, ".huf") == 0) {
+            destino = (char*)malloc(lo - 3);
+            if (destino) { memcpy(destino, origen, lo - 4); destino[lo - 4] = '\0'; }
+        } else {
+            destino = con_sufijo(origen, ".out");
+        }
+    }
+    if (!destino) { fprintf(stderr, "[error] No hay memoria suficiente (malloc).\n"); return -1; }
+
+    int rc = -1;
+    if (ec->fd != -1 && tarea_bg_misma_ruta(destino, ec->nombre_archivo)) {
+        fprintf(stderr, "[error] La salida '%s' es el archivo abierto en el editor; indique otro nombre: x %s <otra_salida>\n", destino, origen);
+    } else if (tarea_bg_ruta_en_uso(&ec->tarea, destino)) {
+        fprintf(stderr, "[error] '%s' está reservado por otra tarea en segundo plano.\n", destino);
+    } else if (access(destino, F_OK) == 0) {
+        fprintf(stderr, "[error] '%s' ya existe; no se sobrescribe. Indique otra salida: x %s <otra_salida>\n", destino, origen);
+    } else if (tarea_bg_descomprimir(&ec->tarea, origen, destino) == 0) {
+        printf("Descompresión iniciada en segundo plano: '%s' -> '%s'.\n"
+               "Use 'e' para ver el progreso o 'c' para cancelar.\n", origen, destino);
+        rc = 0;
+    }
+    free(destino);
+    return rc;
+}
+
+static int cmd_c(EstadoComando *ec) {
+    if (tarea_bg_cancelar(&ec->tarea)) printf("Cancelación solicitada; la tarea se detendrá al terminar el bloque en curso.\n");
+    else printf("No hay ninguna tarea en segundo plano.\n");
+    return 0;
+}
+
+static int cmd_w(EstadoComando *ec) {
+    if (!tarea_bg_activa(&ec->tarea)) { tarea_bg_reap(&ec->tarea); printf("No hay ninguna tarea en segundo plano.\n"); return 0; }
+    if (tarea_bg_esperar(&ec->tarea, &g_interrumpido)) {
+        /* Ctrl+C durante 'w' solo abandona la espera (como en cualquier shell);
+           la tarea sigue y se puede cancelar con 'c'. Reiniciamos la bandera para
+           que un Ctrl+C posterior en el prompt sí cierre el editor limpiamente. */
+        g_interrumpido = 0;
+        printf("\nEspera interrumpida (Ctrl+C). La tarea sigue en curso: use 'e' para ver el progreso o 'c' para cancelarla.\n");
     }
     return 0;
 }
@@ -338,6 +464,12 @@ static void mostrar_ayuda(void) {
         "  i <n> <texto>     Inserta <texto> como línea n, desplazando el resto.\n"
         "  s <palabra>       Busca <palabra> en el documento (imprime líneas).\n"
         "  q                 Cierra el archivo (fd) y sale del editor.\n"
+        "  --- Compresión Huffman concurrente (segundo plano) ---\n"
+        "  z [salida]        Comprime el archivo abierto (por defecto <archivo>.huf).\n"
+        "  x <huf> [salida]  Descomprime un .huf (verifica integridad por bloque).\n"
+        "  e                 Muestra el estado/progreso de la tarea en curso.\n"
+        "  c                 Cancela la tarea en curso.\n"
+        "  w                 Espera a que termine la tarea en curso.\n"
         "  h | ?             Muestra esta ayuda.\n"
     );
 }
@@ -354,17 +486,29 @@ int modo_comando_ejecutar(const char *archivo_inicial) {
         cmd_o(&ec, archivo_inicial);
     }
 
+    /* SIGINT/SIGTERM: sin SA_RESTART, para que fgets() devuelva NULL (EINTR) y
+       podamos cancelar la tarea, hacer join de los hilos y liberar todo. */
+    struct sigaction sa, viejo_int, viejo_term;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = manejador_senal;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, &viejo_int);
+    sigaction(SIGTERM, &sa, &viejo_term);
+    g_interrumpido = 0;
+
     char linea[MAX_LINEA_ENTRADA];
     int salir = 0;
 
     while (!salir) {
-        printf("editor> ");
+        tarea_bg_reap(&ec.tarea);   /* recoge (join) la tarea si ya terminó */
+        printf(PROMPT_EDITOR);
         fflush(stdout);
 
         /* --- E/S ESTÁNDAR PERMITIDA: fgets() para leer comandos desde STDIN --- */
         if (fgets(linea, sizeof(linea), stdin) == NULL) {
-            printf("\n");
-            break; /* EOF (Ctrl+D): terminamos igual que con 'q' */
+            if (g_interrumpido) printf("\n[señal] Interrumpido: cerrando de forma limpia...\n");
+            else printf("\n");
+            break; /* EOF (Ctrl+D) o señal: terminamos igual que con 'q' */
         }
 
         size_t len = strlen(linea);
@@ -384,6 +528,11 @@ int modo_comando_ejecutar(const char *archivo_inicial) {
             case 'd': cmd_d(&ec, resto);  break;
             case 'i': cmd_i(&ec, resto);  break;
             case 's': cmd_s(&ec, resto);  break;
+            case 'z': cmd_z(&ec, resto);  break;
+            case 'x': cmd_x(&ec, resto);  break;
+            case 'e': tarea_bg_imprimir_estado(&ec.tarea); break;
+            case 'c': cmd_c(&ec);         break;
+            case 'w': cmd_w(&ec);         break;
             case 'q': salir = 1;          break;
             case 'h':
             case '?': mostrar_ayuda();    break;
@@ -395,7 +544,10 @@ int modo_comando_ejecutar(const char *archivo_inicial) {
     /* --- CALL SYSTEM: close() + free() de todo el buffer dinámico ---
        Garantiza cero fugas de memoria y de descriptores de archivo,
        verificable con valgrind. */
+    tarea_bg_finalizar(&ec.tarea);   /* cancela (si hace falta), join de hilos, libera */
     estado_cerrar_archivo(&ec);
+    sigaction(SIGINT, &viejo_int, NULL);
+    sigaction(SIGTERM, &viejo_term, NULL);
     printf("Editor cerrado correctamente (sin fugas de memoria ni descriptores abiertos).\n");
     return 0;
 }

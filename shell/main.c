@@ -131,8 +131,8 @@ Command commands[] = {
     {
         "editor", "edicion",
         "editor [archivo]",
-        "Abre el editor de texto interactivo (comandos internos: o/p/a/d/i/s/q).",
-        "open(2), read(2), write(2), lseek(2), ftruncate(2), close(2)",
+        "Abre el editor de texto interactivo (comandos internos: o/p/a/d/i/s/q y z/x/e/c/w para compresión Huffman en segundo plano).",
+        "open(2), read(2), write(2), lseek(2), ftruncate(2), close(2), pthread_create(3), pread(2), rename(2)",
         cmd_editor
     }
 };
@@ -215,7 +215,7 @@ void print_help(const char *arg) {
         printf("  " COLOR_CATEGORY "memoria" COLOR_RESET "    - Comandos de control de heap y memoria (sbrk, mmap, ...)\n");
         printf("  " COLOR_CATEGORY "monitoreo" COLOR_RESET "  - Comandos de procesos, señales y recursos (fork, exec, kill, getrusage)\n");
         printf("  " COLOR_CATEGORY "utilidades" COLOR_RESET " - Comandos útiles del sistema (saludar, hora, fecha, despedir)\n");
-        printf("  " COLOR_CATEGORY "edicion" COLOR_RESET "    - Editor de texto interactivo (comando 'editor', ciclo o/p/a/d/i/s/q)\n\n");
+        printf("  " COLOR_CATEGORY "edicion" COLOR_RESET "    - Editor de texto interactivo (comando 'editor', ciclo o/p/a/d/i/s/q + compresión Huffman concurrente z/x/e/c/w)\n\n");
         printf("Uso general:\n");
         printf("  " COLOR_PROMPT "help <categoria>" COLOR_RESET "  - Muestra comandos específicos de una categoría.\n");
         printf("  " COLOR_PROMPT "help <comando>" COLOR_RESET "    - Explica el uso y las syscalls de un comando específico.\n");
